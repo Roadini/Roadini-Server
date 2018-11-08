@@ -1,0 +1,28 @@
+version: '3'
+
+services:
+  web:
+    restart: always
+    build: .
+    command: bash -c "sleep 15 && python roadini/manage.py makemigrations && python roadini/manage.py migrate && python roadini/manage.py runserver 0.0.0.0:8080"
+    container_name: roadiniApi
+    volumes:
+        - .:/roadiniApi
+    ports:
+        - "8080:8080"
+    depends_on:
+        - postgres
+
+  postgres:
+    container_name: roadini_db
+    restart: always
+    image: launcher.gcr.io/google/postgresql10
+    volumes:
+        - ./postgres/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+        - ./backups/postgresql:/backupo
+    ports:
+        - "5432:5432"
+    environment:
+        - POSTGRES_USER=admin
+        - POSTGRES_PASSWORD=admin
+        - POSTGRES_DB=roadinidb
