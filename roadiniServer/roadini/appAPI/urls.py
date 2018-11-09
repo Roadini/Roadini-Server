@@ -7,6 +7,6 @@ router.register('pathsTable', views.PathsTableView)
 
 urlpatterns = [
         path('',include(router.urls)),
-        path('feed_App', views.feed, name='feed_App')
+        path('feed', views.feed, name='feed')
 
 ]

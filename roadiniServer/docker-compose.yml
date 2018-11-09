@@ -3,15 +3,23 @@ version: '3'
 services:
   web:
     restart: always
-    build: .
-    command: bash -c "sleep 15 && python roadini/manage.py makemigrations && python roadini/manage.py migrate && python roadini/manage.py runserver 0.0.0.0:8080"
-    container_name: roadiniApi
+    image: roadini_api
+    command: bash -c "sleep 15 && python roadini/manage.py makemigrations && python roadini/manage.py migrate && python roadini/manage.py runserver 0.0.0.0:8000"
+    container_name: roadini_api
     volumes:
         - .:/roadiniApi
     ports:
-        - "8080:8080"
+        - "8000:8000"
     depends_on:
         - postgres
+
+  nginx:
+    restart: always
+    image: nginx_roadini
+    ports:
+        - "8080:8080"
+    depends_on:
+        - web
 
   postgres:
     container_name: roadini_db
