@@ -17,9 +17,11 @@ services:
     restart: always
     image: nginx_roadini
     ports:
-        - "8080:8080"
+        - "80:80"
     depends_on:
         - web
+    expose:
+        - "80"
 
   postgres:
     container_name: roadini_db
