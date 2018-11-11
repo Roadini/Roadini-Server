@@ -25,7 +25,7 @@ SECRET_KEY = 'eiq-ze1c24ft4ql3m1n2t0c#77fo&gldrx&q(g%0u6q(z(!u*a'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["engserv-1-aulas.ws.atnog.av.it.pt"]
+ALLOWED_HOSTS = ["engserv-1-aulas.ws.atnog.av.it.pt", "localhost"]
 
 
 # Application definition
