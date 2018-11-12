@@ -37,3 +37,10 @@ def personalTrips(request):
 
     response = JsonResponse(trips, content_type='application/json')
     return response
+
+def get_user_lists(request):
+    r = requests.get('http://httpbin.org/')
+    print(type(r))
+    print(r.status_code)
+    print(r.headers)
+    print(r.headers['content-type'])
