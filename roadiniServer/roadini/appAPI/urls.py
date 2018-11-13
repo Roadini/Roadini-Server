@@ -10,5 +10,6 @@ urlpatterns = [
         path('feed', views.feed, name='feed'),
         path('magicRoute', views.magicRoute, name='magicRoute'),
         path('personalTrips', views.personalTrips, name='personalTrips'),
+        path('testHttp', views.get_user_lists, name='user_lists'),
 
 ]
