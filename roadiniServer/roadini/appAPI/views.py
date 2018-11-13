@@ -2,10 +2,11 @@ from django.shortcuts import render
 from rest_framework import viewsets
 from .models import PathsTable
 from .serializers import PathsTableSerializer
+import requests
+import json
 
 
-from django.http import JsonResponse
-# Create your views here.
+from django.http import JsonResponse # Create your views here.
 
 class PathsTableView(viewsets.ModelViewSet):
     queryset = PathsTable.objects.all()
@@ -39,8 +40,13 @@ def personalTrips(request):
     return response
 
 def get_user_lists(request):
-    r = requests.get('http://httpbin.org/')
+    headers = {'Content-type': 'Content-Type: application/json'}
+    r = requests.get('http://geoclust_api:3001/api/v1/lists/user/1', headers=headers)
     print(type(r))
     print(r.status_code)
     print(r.headers)
     print(r.headers['content-type'])
+    json_data = json.loads(r.text) 
+    print(json_data)
+    response = JsonResponse(json_data, content_type='application/json')
+    return response
