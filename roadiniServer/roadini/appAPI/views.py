@@ -4,8 +4,9 @@ from .models import PathsTable
 from .serializers import PathsTableSerializer
 import requests
 import json
+import os
 
-
+from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse # Create your views here.
 
 class PathsTableView(viewsets.ModelViewSet):
@@ -39,14 +40,55 @@ def personalTrips(request):
     response = JsonResponse(trips, content_type='application/json')
     return response
 
+##GEO
 def get_user_lists(request):
-    headers = {'Content-type': 'Content-Type: application/json'}
+    headers = {'Content-type': 'application/json'}
     r = requests.get('http://geoclust_api:3001/api/v1/lists/user/1', headers=headers)
+    if(r.status_code==200):
+        json_response = {}
+        json_data = json.loads(r.text) 
+        list_lists = []
+        for l in json_data["result"]:
+            json_tmp = {}
+            json_tmp["listName"] = l["list_name"]
+            json_tmp["listId"] = l["id"]
+            json_tmp["userId"] = l["user_id"]
+            json_tmp["listItem"] = None
+            list_lists.append(json_tmp)
+
+
+        json_response["result"] = list_lists
+        print(json_response)
+        response = JsonResponse(json_response, content_type='application/json')
+    return response
+
+@csrf_exempt
+def create_list(request):
+    headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
+
+    name = request.POST["name"];
+    new_list = {"user_id":1, "list_name":name}
+    jsonData = json.dumps(new_list)
+    r = requests.post('http://geoclust_api:3001/api/v1/lists', data=jsonData, headers=headers)
+ 
+    if(r.status_code == 200):
+        json_data = json.loads(r.text) 
+        print(json_data)
+    else:
+        json_data = {"status":False}
+        response = JsonResponse(json_data, content_type='application/json')
+        return response
+    response = JsonResponse(json_data, content_type='application/json')
+    return response
+
+##CDN
+def save_on_cdn(request):
+    module_dir = os.path.dirname(__file__)  # get current directory
+    file_path = os.path.join(module_dir, 'transferir.jpeg')
+    data = open(file_path,'rb').read()
+    r = requests.post('http://cdnapi:9001/api/v1_0/user',data=data)
+
     print(type(r))
     print(r.status_code)
     print(r.headers)
-    print(r.headers['content-type'])
-    json_data = json.loads(r.text) 
-    print(json_data)
-    response = JsonResponse(json_data, content_type='application/json')
-    return response
+    print(r)

@@ -10,6 +10,8 @@ urlpatterns = [
         path('feed', views.feed, name='feed'),
         path('magicRoute', views.magicRoute, name='magicRoute'),
         path('personalTrips', views.personalTrips, name='personalTrips'),
-        path('testHttp', views.get_user_lists, name='user_lists'),
+        path('ownLists', views.get_user_lists, name='user_lists'),
+        path('postImage', views.save_on_cdn, name='save_on_cdn'),
+        path('createList', views.create_list, name='create_list'),
 
 ]
