@@ -13,5 +13,8 @@ urlpatterns = [
         path('ownLists', views.get_user_lists, name='user_lists'),
         path('postImage', views.save_on_cdn, name='save_on_cdn'),
         path('createList', views.create_list, name='create_list'),
+        path('nearPlaces', views.near_places, name='near_places'),
+        path('listName/<int:user_id>', views.list_name, name='list_name'),
+        path('addItem', views.add_item_list, name='add_item_list'),
 
 ]

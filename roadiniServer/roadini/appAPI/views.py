@@ -5,6 +5,7 @@ from .serializers import PathsTableSerializer
 import requests
 import json
 import os
+from random import randint
 
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse # Create your views here.
@@ -53,14 +54,92 @@ def get_user_lists(request):
             json_tmp["listName"] = l["list_name"]
             json_tmp["listId"] = l["id"]
             json_tmp["userId"] = l["user_id"]
-            json_tmp["listItem"] = None
-            list_lists.append(json_tmp)
 
+            url1 = 'http://geoclust_api:3001/api/v1/visits/list/' + str(l["id"])
+            print(url1)
+            r1 = requests.get(url1, headers=headers)
+            list_items = []
+            if(r1.status_code == 200):
+                json_tmp1 = {}
+                json_data1 = json.loads(r1.text)
+                l1 = json_data1["result"]
+                print(l1)
+                if(l1["review"] != ""):
+                    description = l1["review"] 
+                else:
+                    description = None 
+
+
+                url2 = 'http://geoclust_api:3001/api/v1/gspots/' + str(l1["internal_id_place"])
+                print(url2)
+                r2 = requests.get(url2, headers=headers)
+                if(r2.status_code == 200):
+                    json_data2 = json.loads(r2.text)
+                    l2 = json_data2["result"]
+                    json_tmp1["location"] = l2["address"]
+                    json_tmp1["name"] = l2["name"]
+                    json_tmp1["listId"] = l["id"]
+                    json_tmp1["stars"] = randint(0, 9)
+                    json_tmp1["urlImage"] = "https://www.google.pt/images/branding/googlelogo/1x/googlelogo_white_background_color_272x92dp.png"
+                    json_tmp1["postId"] = l2["id"]
+                    json_tmp1["description"] = description
+
+                    list_items.append(json_tmp1)
+            json_tmp["listItem"] = list_items
+            list_lists.append(json_tmp)
+        json_response["result"] = list_lists
+        print(json_response)
+        response = JsonResponse(json_response, content_type='application/json')
+    return response
+
+def near_places(request):
+    headers = {'Content-type': 'application/json'}
+    r = requests.get(' http://geoclust_api:3001/api/v1/gspots', headers=headers)
+    if(r.status_code==200):
+        json_response = {}
+        json_data = json.loads(r.text) 
+
+
+        json_response["listPlaces"] = json_data["result"]
+        print(json_response)
+        response = JsonResponse(json_response, content_type='application/json')
+    response = JsonResponse(json_response, content_type='application/json')
+    return response
+
+def list_name(request, user_id):
+    headers = {'Content-type': 'application/json'}
+    r = requests.get('http://geoclust_api:3001/api/v1/lists/user/1', headers=headers)
+    if(r.status_code==200):
+        json_response = {}
+        json_data = json.loads(r.text) 
+        list_lists = []
+        for l in json_data["result"]:
+            json_tmp = {}
+            json_tmp["listName"] = l["list_name"]
+            json_tmp["listId"] = l["id"]
+            json_tmp["userId"] = l["user_id"]
+            list_lists.append(json_tmp)
 
         json_response["result"] = list_lists
         print(json_response)
         response = JsonResponse(json_response, content_type='application/json')
     return response
+
+@csrf_exempt
+def add_item_list(request):
+    headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
+    new_list = {"list_id":int(request.POST["listId"]), "internal_id_place":int(request.POST["itemId"]), "review": request.POST["review"]}
+    jsonData = json.dumps(new_list)
+    r = requests.post('http://geoclust_api:3001/api/v1/visits', data=jsonData, headers=headers)
+    print(r.text)
+    if(r.status_code == 200):
+        json_data = json.loads(r.text) 
+    else:
+        json_data = {"status":False}
+    
+    response = JsonResponse(json_data, content_type='application/json')
+    return response
+
 
 @csrf_exempt
 def create_list(request):
