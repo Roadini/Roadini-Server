@@ -84,39 +84,39 @@ def get_user_lists(request):
             r1 = requests.get(url1, headers=headers)
             list_items = []
             if(r1.status_code == 200):
-                json_tmp1 = {}
                 json_data1 = json.loads(r1.text)
-                l1 = json_data1["result"]
-                if(l1["review"] != ""):
-                    description = l1["review"] 
-                else:
-                    description = None 
-
-
-                url2 = 'http://geoclust_api:3001/api/v1/gspots/' + str(l1["internal_id_place"])
-                r2 = requests.get(url2, headers=headers)
-                if(r2.status_code == 200):
-                    json_data2 = json.loads(r2.text)
-                    l2 = json_data2["result"]
-                    json_tmp1["location"] = l2["address"]
-                    json_tmp1["name"] = l2["name"]
-                    json_tmp1["listId"] = l["id"]
-                    json_tmp1["stars"] = randint(0, 9)
-                    json_tmp1["postId"] = l2["id"]
-                    json_tmp1["description"] = description
-
-                    if(ListPostPhoto.objects.filter(listId=l["id"], postId=l2["id"]).exists()):
-                        listIds = ListPostPhoto.objects.get(listId=l["id"], postId=l2["id"])
-                        url3 = 'http://cdnapi:8080/api/v1/user/' + listIds.imageId
-                        r3 = requests.get(url3, headers=headers)
-                        print(json.loads(r3.text)["url"])
-                        print("EXISTE")
-                        json_tmp1["urlImage"] = json.loads(r3.text)["url"]
+                for l1 in json_data1["result"]:
+                    json_tmp1 = {}
+                    if(l1["review"] != ""):
+                        description = l1["review"] 
                     else:
-                        json_tmp1["urlImage"] = "http://engserv-1-aulas.ws.atnog.av.it.pt/geoclust/" + str(l1["internal_id_place"]) + ".jpeg"
+                        description = None 
 
-                    print(json_tmp1)
-                list_items.append(json_tmp1)
+
+                    url2 = 'http://geoclust_api:3001/api/v1/gspots/' + str(l1["internal_id_place"])
+                    r2 = requests.get(url2, headers=headers)
+                    if(r2.status_code == 200):
+                        json_data2 = json.loads(r2.text)
+                        l2 = json_data2["result"]
+                        json_tmp1["location"] = l2["address"]
+                        json_tmp1["name"] = l2["name"]
+                        json_tmp1["listId"] = l["id"]
+                        json_tmp1["stars"] = randint(0, 9)
+                        json_tmp1["postId"] = l2["id"]
+                        json_tmp1["description"] = description
+
+                        if(ListPostPhoto.objects.filter(listId=l["id"], postId=l2["id"]).exists()):
+                            listIds = ListPostPhoto.objects.get(listId=l["id"], postId=l2["id"])
+                            url3 = 'http://cdnapi:8080/api/v1/user/' + listIds.imageId
+                            r3 = requests.get(url3, headers=headers)
+                            print(json.loads(r3.text)["url"])
+                            print("EXISTE")
+                            json_tmp1["urlImage"] = json.loads(r3.text)["url"]
+                        else:
+                            json_tmp1["urlImage"] = "http://engserv-1-aulas.ws.atnog.av.it.pt/geoclust/" + str(l1["internal_id_place"]) + ".jpeg"
+
+                        print(json_tmp1)
+                    list_items.append(json_tmp1)
             json_tmp["listItem"] = list_items
             list_lists.append(json_tmp)
         json_response["result"] = list_lists
@@ -211,18 +211,21 @@ def save_on_cdn(request):
                 if(listIds.exists()):
                     listIds = ListPostPhoto.objects.get(listId=listId, postId=postId)
                     listIds.imageId= (json.loads(r1.text)["result"]).split(" ")[1]
-                    listIds.save()
+
                 else:
                     ListPostPhoto.objects.create(
                             listId=listId,
                             postId=postId,
                             imageId=(json.loads(r1.text)["result"]).split(" ")[1],
                             )
+                json_data = {"status":True}
+                response = JsonResponse(json_data, content_type='application/json')
+                return response
+                listIds.save()
 
             except IntegrityError as e:
                 print(e)
 
-
-    json_data = {"status":True}
+    json_data = {"status":False}
     response = JsonResponse(json_data, content_type='application/json')
     return response
