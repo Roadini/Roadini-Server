@@ -8,10 +8,12 @@ router.register('pathsTable', views.PathsTableView)
 urlpatterns = [
         path('',include(router.urls)),
         path('feed', views.feed, name='feed'),
-        path('magicRoute', views.magicRoute, name='magicRoute'),
-        path('personalTrips', views.personalTrips, name='personalTrips'),
-        path('ownLists', views.get_user_lists, name='user_lists'),
         path('postImage', views.save_on_cdn, name='save_on_cdn'),
+        
+        #GEO URLS
+        path('magicRoute', views.magic_route, name='magic_route'),
+        path('personalTrips', views.personalTrips, name='personalTrips'),
+        path('ownLists', views.get_user_lists, name='get_user_lists'),
         path('createList', views.create_list, name='create_list'),
         path('nearPlaces', views.near_places, name='near_places'),
         path('listName/<int:user_id>', views.list_name, name='list_name'),

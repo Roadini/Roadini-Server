@@ -1,14 +1,20 @@
 from django.shortcuts import render
 from rest_framework import viewsets
-from .models import PathsTable
 from .serializers import PathsTableSerializer
 import requests
 import json
 import os
 from random import randint
+import base64
 
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse # Create your views here.
+
+from .models import PathsTable
+from .models import ListPostPhoto
+from django.db import IntegrityError
+from django.shortcuts import render_to_response
+
 
 class PathsTableView(viewsets.ModelViewSet):
     queryset = PathsTable.objects.all()
@@ -23,13 +29,6 @@ def feed(request):
     response = JsonResponse(feed, content_type='application/json')
     return response
 
-def magicRoute(request):
-
-    route = {"route" : [ {"categoryName" : "Restaurant", "categoryId" : "1", "placeName" : "Azur", "placeId" : "23", "placeDescription" : "This superbly located newbie sits by the entrance of Buža II, and quickly went to number one on TripAdvisor in its very first season. Here you can tuck into a reasonably priced, Med-and-Asian-influenced main here – fragrant meatballs in a chicken-coconut broth, perhaps, or Adriatic prawn pouches on grilled aubergine in a red-curry-and-coconut sauce – before an afternoon's sunbathing or nightcap overlooking the waves. Starters include mussels in beer butter and chili, and Dalmatian tom yum soup.", "urlImage" : "https://media.timeout.com/images/102323695/380/285/image.jpg" },
-  {"categoryName" : "Beaches", "categoryId" : "2", "placeName" : "Banje Beach", "placeId" : "40", "placeDescription" : "Located in the extreme south coast of Croatia, Dubrovnik is one the country’s top travel destinations, in part because of the city’s many beaches. Banja Beach, located to the east of the city’s Old Town district, is particularly popular. The pebble beach is surrounded by some of Dubrovnik’s best hotels and is equipped with all the amenities that upscale travelers expect, including deck chairs, umbrellas and ranging rooms equipped with showers. The beach favored by celebrities is a great in-town spot to enjoy water sports like jet skiing and paragliding too.", "urlImage" : "https://www.touropia.com/gfx/d/best-beaches-in-croatia/banje_beach.jpg?v=1" } ]}
-
-    response = JsonResponse(route, content_type='application/json')
-    return response
 
 
 def personalTrips(request):
@@ -42,6 +41,32 @@ def personalTrips(request):
     return response
 
 ##GEO
+
+def magic_route(request):
+
+    headers = {'Content-type': 'application/json'}
+    r = requests.get('http://geoclust_api:3001/api/v1/magic', headers=headers)
+    if(r.status_code==200):
+        json_response = {}
+        json_data = json.loads(r.text) 
+        list_magic = []
+        for l in json_data["result"]:
+            json_tmp = {}
+            json_tmp["categoryName"] = l["primary_type"]
+            json_tmp["placeName"] = l["name"]
+            json_tmp["placeId"] = l["google_place_id"]
+            json_tmp["placeDescription"] = l["address"]
+            json_tmp["lat"] = l["lat"]
+            json_tmp["lng"] = l["lng"]
+            json_tmp["urlImage"] = "https://www.touropia.com/gfx/d/best-beaches-in-croatia/banje_beach.jpg?v=1"
+            list_magic.append(json_tmp)
+
+        route = {"route":list_magic}
+
+
+    response = JsonResponse(route, content_type='application/json')
+    return response
+
 def get_user_lists(request):
     headers = {'Content-type': 'application/json'}
     r = requests.get('http://geoclust_api:3001/api/v1/lists/user/1', headers=headers)
@@ -56,14 +81,12 @@ def get_user_lists(request):
             json_tmp["userId"] = l["user_id"]
 
             url1 = 'http://geoclust_api:3001/api/v1/visits/list/' + str(l["id"])
-            print(url1)
             r1 = requests.get(url1, headers=headers)
             list_items = []
             if(r1.status_code == 200):
                 json_tmp1 = {}
                 json_data1 = json.loads(r1.text)
                 l1 = json_data1["result"]
-                print(l1)
                 if(l1["review"] != ""):
                     description = l1["review"] 
                 else:
@@ -71,7 +94,6 @@ def get_user_lists(request):
 
 
                 url2 = 'http://geoclust_api:3001/api/v1/gspots/' + str(l1["internal_id_place"])
-                print(url2)
                 r2 = requests.get(url2, headers=headers)
                 if(r2.status_code == 200):
                     json_data2 = json.loads(r2.text)
@@ -80,15 +102,17 @@ def get_user_lists(request):
                     json_tmp1["name"] = l2["name"]
                     json_tmp1["listId"] = l["id"]
                     json_tmp1["stars"] = randint(0, 9)
-                    json_tmp1["urlImage"] = "https://www.google.pt/images/branding/googlelogo/1x/googlelogo_white_background_color_272x92dp.png"
                     json_tmp1["postId"] = l2["id"]
                     json_tmp1["description"] = description
+
+                    if(ListPostPhoto.objects.filter(listId=l["id"], postId=l2["id"]).exists()):
+                        print("EXISTE")
+                    json_tmp1["urlImage"] = "https://www.google.pt/images/branding/googlelogo/1x/googlelogo_white_background_color_272x92dp.png"
 
                     list_items.append(json_tmp1)
             json_tmp["listItem"] = list_items
             list_lists.append(json_tmp)
         json_response["result"] = list_lists
-        print(json_response)
         response = JsonResponse(json_response, content_type='application/json')
     return response
 
@@ -101,7 +125,6 @@ def near_places(request):
 
 
         json_response["listPlaces"] = json_data["result"]
-        print(json_response)
         response = JsonResponse(json_response, content_type='application/json')
     response = JsonResponse(json_response, content_type='application/json')
     return response
@@ -121,7 +144,6 @@ def list_name(request, user_id):
             list_lists.append(json_tmp)
 
         json_response["result"] = list_lists
-        print(json_response)
         response = JsonResponse(json_response, content_type='application/json')
     return response
 
@@ -131,7 +153,6 @@ def add_item_list(request):
     new_list = {"list_id":int(request.POST["listId"]), "internal_id_place":int(request.POST["itemId"]), "review": request.POST["review"]}
     jsonData = json.dumps(new_list)
     r = requests.post('http://geoclust_api:3001/api/v1/visits', data=jsonData, headers=headers)
-    print(r.text)
     if(r.status_code == 200):
         json_data = json.loads(r.text) 
     else:
@@ -161,13 +182,40 @@ def create_list(request):
     return response
 
 ##CDN
-def save_on_cdn(request):
-    module_dir = os.path.dirname(__file__)  # get current directory
-    file_path = os.path.join(module_dir, 'transferir.jpeg')
-    data = open(file_path,'rb').read()
-    r = requests.post('http://cdnapi:9001/api/v1_0/user',data=data)
 
-    print(type(r))
-    print(r.status_code)
-    print(r.headers)
-    print(r)
+@csrf_exempt
+def save_on_cdn(request):
+    headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
+    listId = int(request.POST["listId"])
+    postId = int(request.POST["itemId"])
+    new_list = {"list_id":listId, "internal_id_place":postId, "review": request.POST["review"]}
+    jsonData = json.dumps(new_list)
+    r = requests.post('http://geoclust_api:3001/api/v1/visits', data=jsonData, headers=headers)
+    if(r.status_code == 200):
+        data = request.FILES.get("photos")
+        files = {'file': data}
+        r1 = requests.post('http://cdnapi:8080/api/v1/user/',files=files)
+
+        if(r1.status_code==201):
+
+            try:
+
+                listIds = ListPostPhoto.objects.filter(listId=listId, postId=postId)
+                if(listIds.exists()):
+                    listIds = ListPostPhoto.objects.get(listId=listId, postId=postId)
+                    listIds.imageId= (json.loads(r1.text)["result"]).split(" ")[1]
+                    listIds.save()
+                else:
+                    ListPostPhoto.objects.create(
+                            listId=listId,
+                            postId=postId,
+                            imageId=(json.loads(r1.text)["result"]).split(" ")[1],
+                            )
+
+            except IntegrityError as e:
+                print(e)
+
+
+    json_data = {"status":True}
+    response = JsonResponse(json_data, content_type='application/json')
+    return response
