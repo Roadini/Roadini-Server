@@ -106,10 +106,17 @@ def get_user_lists(request):
                     json_tmp1["description"] = description
 
                     if(ListPostPhoto.objects.filter(listId=l["id"], postId=l2["id"]).exists()):
+                        listIds = ListPostPhoto.objects.get(listId=l["id"], postId=l2["id"])
+                        url3 = 'http://cdnapi:8080/api/v1/user/' + listIds.imageId
+                        r3 = requests.get(url3, headers=headers)
+                        print(json.loads(r3.text)["url"])
                         print("EXISTE")
-                    json_tmp1["urlImage"] = "https://www.google.pt/images/branding/googlelogo/1x/googlelogo_white_background_color_272x92dp.png"
+                        json_tmp1["urlImage"] = json.loads(r3.text)["url"]
+                    else:
+                        json_tmp1["urlImage"] = "http://engserv-1-aulas.ws.atnog.av.it.pt/geoclust/" + str(l1["internal_id_place"]) + ".jpeg"
 
-                    list_items.append(json_tmp1)
+                    print(json_tmp1)
+                list_items.append(json_tmp1)
             json_tmp["listItem"] = list_items
             list_lists.append(json_tmp)
         json_response["result"] = list_lists
