@@ -37,8 +37,6 @@ services:
     volumes:
         - ./postgres/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
         - ./backups/postgresql:/backupo
-    ports:
-        - "5432:5432"
     environment:
         - POSTGRES_USER=admin
         - POSTGRES_PASSWORD=admin

@@ -58,7 +58,7 @@ def magic_route(request):
             json_tmp["placeDescription"] = l["address"]
             json_tmp["lat"] = l["lat"]
             json_tmp["lng"] = l["lng"]
-            json_tmp["urlImage"] = "https://www.touropia.com/gfx/d/best-beaches-in-croatia/banje_beach.jpg?v=1"
+            json_tmp["urlImage"] = "http://engserv-1-aulas.ws.atnog.av.it.pt/geoclust/" + str(l["id"]) + ".jpeg"
             list_magic.append(json_tmp)
 
         route = {"route":list_magic}
