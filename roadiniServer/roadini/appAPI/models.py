@@ -19,3 +19,14 @@ class ListPostPhoto(models.Model):
 
     def __str__(self):
         return str(self.listId) + "-" + str(self.postId) + "-" + self.imageId
+
+class UserAuth(models.Model):
+    userId = models.IntegerField(null=False, blank=False)
+    cookie = models.TextField(null=False, blank=False)
+
+    class Meta:
+        unique_together = (("userId",))
+        db_table = 'UserAuth'
+
+    def __str__(self):
+        return str(self.userId) + "-" + str(self.cookie)

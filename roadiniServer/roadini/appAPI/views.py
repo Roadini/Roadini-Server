@@ -1,19 +1,24 @@
 from django.shortcuts import render
 from rest_framework import viewsets
 from .serializers import PathsTableSerializer
+
+from random import randint
 import requests
+import http.cookiejar
 import json
 import os
-from random import randint
 import base64
 
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse # Create your views here.
+from django.db import IntegrityError
+from django.shortcuts import render_to_response
 
 from .models import PathsTable
 from .models import ListPostPhoto
-from django.db import IntegrityError
-from django.shortcuts import render_to_response
+from .models import UserAuth
+
+
 
 
 class PathsTableView(viewsets.ModelViewSet):
@@ -67,9 +72,9 @@ def magic_route(request):
     response = JsonResponse(route, content_type='application/json')
     return response
 
-def get_user_lists(request):
+def get_user_lists(request, user_id):
     headers = {'Content-type': 'application/json'}
-    r = requests.get('http://geoclust_api:3001/api/v1/lists/user/1', headers=headers)
+    r = requests.get('http://geoclust_api:3001/api/v1/lists/user/' + str(user_id), headers=headers)
     if(r.status_code==200):
         json_response = {}
         json_data = json.loads(r.text) 
@@ -229,3 +234,63 @@ def save_on_cdn(request):
     json_data = {"status":False}
     response = JsonResponse(json_data, content_type='application/json')
     return response
+
+###AUTH
+@csrf_exempt
+def create_user(request):
+    jwt = request.POST["cookie"][4:]
+    print(jwt)
+    jsonLoaded = {"jwt":jwt}
+    response = requests.post('http://auth_api:3000/auth/v1/getselfuser', cookies=jsonLoaded)
+    user = {}
+    if(response.status_code):
+        try:
+            user = json.loads(response.text)[0]
+
+            if(UserAuth.objects.filter(userId=user["id"]).exists()):
+                userExist = UserAuth.objects.get(userId=user["id"])
+                userExist.cookie= jwt
+            else:
+                UserAuth.objects.create(
+                        userId=user["id"],
+                        cookie=jwt,
+                        )
+            user["status"]=True
+            response = JsonResponse(user, content_type='application/json')
+            return response
+        except:
+            user["status"]=False
+            response = JsonResponse(user, content_type='application/json')
+    else:
+        user["status"]=False
+        response = JsonResponse(user, content_type='application/json')
+        return response
+
+def user_info(request, user_id):
+    user = UserAuth.objects.get(userId=user_id)
+    jsonLoaded = {"jwt":user.cookie}
+    followers = 0
+    following = 0
+    status = False
+    response = requests.post('http://auth_api:3000/social/v1/follows/getfollowers', cookies=jsonLoaded)
+    r = json.loads(response.text)
+    print(r)
+    if(response.status_code == 200):
+        followers = r if r != None else 0
+        response = requests.post('http://auth_api:3000/social/v1/follows/getfollowing', cookies=jsonLoaded)
+        r = json.loads(response.text)
+        if(response.status_code == 200):
+            following = r if r != None else 0
+            status = True
+
+    json_response = {}
+    json_response["followers"] = followers
+    json_response["following"] = following
+    json_response["status"] = status
+    response = JsonResponse(json_response, content_type='application/json')
+    return response
+
+
+
+
+
