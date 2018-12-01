@@ -17,6 +17,7 @@ from django.shortcuts import render_to_response
 from .models import PathsTable
 from .models import ListPostPhoto
 from .models import UserAuth
+from .models import PostFeed
 
 
 
@@ -26,11 +27,29 @@ class PathsTableView(viewsets.ModelViewSet):
     serializer_class = PathsTableSerializer
 
 
-def feed(request):
-    
-    feed = {"feed" :[ {"username" : "Tiago Ramalho", "location" : "Croacia", "description" : "Esta viagem foi muito fixe", "postId" : "1", "ownerId" : "1", "urlImage" : "https://scontent.flis7-1.fna.fbcdn.net/v/t1.0-9/20258438_1893652067570862_4019107659665964412_n.jpg?_nc_cat=111&oh=b69b337a86923445d87ed7b445acd224&oe=5C4F4156" },
-        {"username" : "Luís Silva", "location" : "Belgica", "description" : "Esta viagem foi muito fixe", "postId" : "1", "ownerId" : "2", "urlImage" : "https://scontent.flis7-1.fna.fbcdn.net/v/t31.0-8/23735995_1674280279312175_7527285910664902411_o.jpg?_nc_cat=100&oh=52a827ec4e8488cf3664c944853e0d1c&oe=5C4C4ADB"}]}
+def feed(request, user_id):
+    user = UserAuth.objects.get(userId=user_id)
+    jsonLoaded = {"jwt":user.cookie}
+    allFeed = PostFeed.objects.all()
+    posts = []
+    for f in allFeed:
+        jsonData = {}
+        jsonData["getby"] = "id"
+        jsonData["value"] = f.userId
+        response = requests.post('http://auth_api:3000/auth/v1/getusers', cookies=jsonLoaded, data=json.dumps(jsonData))
+        r = json.loads(response.text)[0]
+        jsonPost = {}
+        jsonPost["username"] = r["name"]
+        jsonPost["location"] = "need Location"
+        jsonPost["description"] = " "
+        jsonPost["postId"] = f.authId
+        jsonPost["ownerId"] = user_id
+        jsonPost["urlImage"] = f.urlStatic
+        jsonPost["photo"] = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRx-RKT_MyU2F4V6i3z2TIZ2Y_VNP3u7tkrPJvpQH5kFuj5-7XEiQ"
+        posts.append(jsonPost)
 
+    
+    feed = {"feed" : posts }
     response = JsonResponse(feed, content_type='application/json')
     return response
 
@@ -244,12 +263,14 @@ def create_user(request):
     response = requests.post('http://auth_api:3000/auth/v1/getselfuser', cookies=jsonLoaded)
     user = {}
     if(response.status_code):
+        print(json.loads(response.text))
         try:
             user = json.loads(response.text)[0]
 
             if(UserAuth.objects.filter(userId=user["id"]).exists()):
                 userExist = UserAuth.objects.get(userId=user["id"])
                 userExist.cookie= jwt
+                userExist.save()
             else:
                 UserAuth.objects.create(
                         userId=user["id"],
@@ -266,31 +287,120 @@ def create_user(request):
         response = JsonResponse(user, content_type='application/json')
         return response
 
-def user_info(request, user_id):
+def user_info(request, user_id, other_id):
+    status = False
     user = UserAuth.objects.get(userId=user_id)
     jsonLoaded = {"jwt":user.cookie}
-    followers = 0
-    following = 0
+    jsonData = {}
+    jsonData["getby"] = "id"
+    jsonData["value"] = other_id
+    response = requests.post('http://auth_api:3000/auth/v1/getusers', cookies=jsonLoaded, data=json.dumps(jsonData))
+    r = json.loads(response.text)[0]
+    print(response.status_code)
+    if(response.status_code == 200):
+        status = True
+        print("ENTROU")
+        print(type(r))
+        r['status'] = status
+
+        jsonData={}
+        jsonData["id"]=other_id
+        response1 = requests.post('http://auth_api:3000/social/v1/follows/getfollowers', cookies=jsonLoaded, data=json.dumps(jsonData))
+        print(response1.text)
+        r1 = json.loads(response1.text)
+        if(response1.status_code == 200):
+            r["followers"]= r1 if r1 != None else []
+            print("AQUI")
+            print(r)
+            response2 = requests.post('http://auth_api:3000/social/v1/follows/getfollowing', cookies=jsonLoaded, data=json.dumps(jsonData))
+            r2 = json.loads(response2.text)
+            if(response.status_code == 200):
+                r["following"] = r2 if r2 != None else []
+
+        response = JsonResponse(r, content_type='application/json')
+        return response
+
+
+def search(request, user_id, pattern):
+    user = UserAuth.objects.get(userId=user_id)
+    print(user.cookie)
+    jsonLoaded = {"jwt":user.cookie}
     status = False
-    response = requests.post('http://auth_api:3000/social/v1/follows/getfollowers', cookies=jsonLoaded)
+    response = requests.post('http://auth_api:3000/auth/v1/getallusers', cookies=jsonLoaded)
     r = json.loads(response.text)
     print(r)
+    json_response = []
     if(response.status_code == 200):
-        followers = r if r != None else 0
-        response = requests.post('http://auth_api:3000/social/v1/follows/getfollowing', cookies=jsonLoaded)
-        r = json.loads(response.text)
-        if(response.status_code == 200):
-            following = r if r != None else 0
-            status = True
+        for l in r:
+            if(l["name"].lower().find(pattern.lower())!= -1):
+                newL = l
+                jsonData = {}
+                jsonData["id"]=l["id"]
+                response1 = requests.post('http://auth_api:3000/social/v1/follows/getfollowers', cookies=jsonLoaded, data=json.dumps(jsonData))
+                r1 = json.loads(response1.text)
+                if(response1.status_code == 200):
+                    newL["followers"]= r1 if r1 != None else []
+                    response2 = requests.post('http://auth_api:3000/social/v1/follows/getfollowing', cookies=jsonLoaded, data=json.dumps(jsonData))
+                    r2 = json.loads(response2.text)
+                    if(response.status_code == 200):
+                        newL["following"] = r2 if r2 != None else []
 
-    json_response = {}
-    json_response["followers"] = followers
-    json_response["following"] = following
-    json_response["status"] = status
-    response = JsonResponse(json_response, content_type='application/json')
+                json_response.append(newL)
+    json_return = {}
+    json_return["allUsers"] = json_response
+    response = JsonResponse(json_return, content_type='application/json')
     return response
 
+def follow(request, user_id, other_id):
+    user = UserAuth.objects.get(userId=user_id)
+    jsonLoaded = {"jwt":user.cookie}
+    jsonData = {}
+    jsonData["id"] = other_id
+    response = requests.post('http://auth_api:3000/social/v1/follows/follow', cookies=jsonLoaded, data=json.dumps(jsonData))
+    print(response.status_code)
+    print(response.text)
+    r1 = json.loads(response.text)
+    response = JsonResponse(r1, content_type='application/json')
+    return response
 
+def unfollow(request, user_id, other_id):
+    user = UserAuth.objects.get(userId=user_id)
+    jsonLoaded = {"jwt":user.cookie}
+    jsonData = {}
+    jsonData["id"] = other_id
+    response = requests.post('http://auth_api:3000/social/v1/follows/stopfollowing', cookies=jsonLoaded, data=json.dumps(jsonData))
+    print(response.status_code)
+    print(response.text)
+    r1 = json.loads(response.text)
+    response = JsonResponse(r1, content_type='application/json')
+    return response
 
+@csrf_exempt
+def add_to_feed(request, user_id):
+    urlStatic = request.POST["urlStatic"]
+    localsIds = request.POST["localsIds"]
+    print(urlStatic)
+    print(localsIds)
+    user = UserAuth.objects.get(userId=user_id)
+    jsonLoaded = {"jwt":user.cookie}
+    jsonData = {}
+    jsonData["description"] = "empty"
+    response = requests.post('http://auth_api:3000/social/v1/publication/create', cookies=jsonLoaded, data=json.dumps(jsonData))
+    r1 = json.loads(response.text)
+    print(r1)
+    print(r1["code"])
+    status = False
+    try:
+        PostFeed.objects.create(
+                userId=user_id,
+                urlStatic=urlStatic,
+                authId=r1["code"],
+                localsIds= localsIds,)
+        status=True
 
-
+    except IntegrityError as e:
+        print(e)
+    json_data = {"status":False}
+    print(json_data)
+    response = JsonResponse(json_data, content_type='application/json')
+    return response

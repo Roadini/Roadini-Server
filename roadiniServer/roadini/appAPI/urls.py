@@ -7,7 +7,7 @@ router.register('pathsTable', views.PathsTableView)
 
 urlpatterns = [
         path('',include(router.urls)),
-        path('feed', views.feed, name='feed'),
+        path('feed/<int:user_id>', views.feed, name='feed'),
         path('postImage', views.save_on_cdn, name='save_on_cdn'),
         
         #GEO URLS
@@ -19,8 +19,13 @@ urlpatterns = [
         path('listName/<int:user_id>', views.list_name, name='list_name'),
         path('addItem', views.add_item_list, name='add_item_list'),
 
+
         #AUTH
         path('createUser', views.create_user, name='create_user'),
-        path('userInfo/<int:user_id>', views.user_info, name='user_info'),
+        path('userInfo/<int:user_id>/<int:other_id>', views.user_info, name='user_info'),
+        path('search/<int:user_id>/<str:pattern>', views.search, name='search'),
+        path('follow/<int:user_id>/<int:other_id>', views.follow, name='follow'),
+        path('unfollow/<int:user_id>/<int:other_id>', views.unfollow, name='unfollow'),
+        path('saveRoute/<int:user_id>', views.add_to_feed, name='add_to_feed'),
 
 ]

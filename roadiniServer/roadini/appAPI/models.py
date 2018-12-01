@@ -30,3 +30,16 @@ class UserAuth(models.Model):
 
     def __str__(self):
         return str(self.userId) + "-" + str(self.cookie)
+
+class PostFeed(models.Model):
+    userId = models.IntegerField(null=False, blank=False)
+    urlStatic = models.TextField(null=False, blank=False)
+    authId = models.IntegerField(null=False, blank=False)
+    localsIds = models.TextField(null=False, blank=False)
+
+    class Meta:
+        unique_together = (("userId","authId"))
+        db_table = 'PostFeed'
+
+    def __str__(self):
+        return str(self.userId) + "-" + str(self.authId)
