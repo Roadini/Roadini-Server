@@ -23,6 +23,7 @@ class ListPostPhoto(models.Model):
 class UserAuth(models.Model):
     userId = models.IntegerField(null=False, blank=False)
     cookie = models.TextField(null=False, blank=False)
+    image = models.TextField(null=False, blank=False)
 
     class Meta:
         unique_together = (("userId",))

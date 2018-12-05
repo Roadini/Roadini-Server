@@ -26,29 +26,86 @@ class PathsTableView(viewsets.ModelViewSet):
     queryset = PathsTable.objects.all()
     serializer_class = PathsTableSerializer
 
+def logout(request, user_id):
+    user = UserAuth.objects.get(userId=user_id)
+    jsonLoaded = {"jwt":user.cookie}
+    response = requests.post('http://auth_api:3000/auth/v1/logout', cookies=jsonLoaded)
+    status = False
+    if(response.status_code==200):
+        try:
+            status = True
+            user.cookie = ""
+            user.save()
+        except IntegrityError as e:
+            print(e)
+    
+    json_response = {}
+    json_response["status"] = status
+    response = JsonResponse(json_response, content_type='application/json')
+    return response
+
+@csrf_exempt
+def edit_image(request):
+    headers = {'Content-type': 'application/json'}
+    data = request.FILES.get("photos")
+    files = {'file': data}
+    r1 = requests.post('http://cdnapi:8080/api/v1/user/',files=files)
+    json_response = {}
+    status = False
+    if(r1.status_code==201):
+        url2 = 'http://cdnapi:8080/api/v1/user/' + (json.loads(r1.text)["result"]).split(" ")[1]
+        r3 = requests.get(url2, headers=headers)
+        print(json.loads(r3.text)["url"])
+        try:
+            user = UserAuth.objects.get(userId=request.POST["userId"])
+            user.image = json.loads(r3.text)["url"]
+            user.save()
+            status = True
+        except IntegrityError as e:
+            print(e)
+
+    json_response["status"] = status
+    response = JsonResponse(json_response, content_type='application/json')
+    return response
+
 
 def feed(request, user_id):
     user = UserAuth.objects.get(userId=user_id)
     jsonLoaded = {"jwt":user.cookie}
     allFeed = PostFeed.objects.all()
     posts = []
-    for f in allFeed:
+    
+    allUsers = UserAuth.objects.all()
+
+    for u in allUsers:
         jsonData = {}
         jsonData["getby"] = "id"
-        jsonData["value"] = f.userId
-        response = requests.post('http://auth_api:3000/auth/v1/getusers', cookies=jsonLoaded, data=json.dumps(jsonData))
-        r = json.loads(response.text)[0]
-        jsonPost = {}
-        jsonPost["username"] = r["name"]
-        jsonPost["location"] = "need Location"
-        jsonPost["description"] = " "
-        jsonPost["postId"] = f.authId
-        jsonPost["ownerId"] = user_id
-        jsonPost["urlImage"] = f.urlStatic
-        jsonPost["photo"] = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRx-RKT_MyU2F4V6i3z2TIZ2Y_VNP3u7tkrPJvpQH5kFuj5-7XEiQ"
-        posts.append(jsonPost)
+        jsonData["value"] = u.userId
+        response2 = requests.post('http://auth_api:3000/auth/v1/getusers', cookies=jsonLoaded, data=json.dumps(jsonData))
+        r2 = json.loads(response2.text)[0]
+        print(r2)
 
-    
+        jsonData = {}
+        jsonData["id"] = u.userId
+        response = requests.post('http://auth_api:3000/social/v1/publication/get', cookies=jsonLoaded, data=json.dumps(jsonData))
+        r = json.loads(response.text)
+        if r != []:
+            for f in r:
+                try:
+                    feedObject = PostFeed.objects.get(authId = f["id"])
+
+                    jsonPost = {}
+                    jsonPost["username"] = r2["name"]
+                    jsonPost["location"] = "need Location"
+                    jsonPost["description"] = r2["name"] + " " + f["description"]
+                    jsonPost["postId"] = feedObject.authId
+                    jsonPost["ownerId"] = u.userId
+                    jsonPost["urlImage"] = feedObject.urlStatic
+                    jsonPost["photo"] = u.image 
+
+                    posts.append(jsonPost)
+                except IntegrityError as e:
+                    print(e)
     feed = {"feed" : posts }
     response = JsonResponse(feed, content_type='application/json')
     return response
@@ -66,11 +123,40 @@ def personalTrips(request):
 
 ##GEO
 
-def magic_route(request):
+def magic_route(request,user_id, lat, lng):
+    print(lat)
+    print(lng)
 
     headers = {'Content-type': 'application/json'}
-    r = requests.get('http://geoclust_api:3001/api/v1/magic', headers=headers)
+    r = requests.get('http://geoclust_api:3001/api/v1/magic?lat='+lat+"&lng="+lng+"&user="+str(user_id), headers=headers)
     if(r.status_code==200):
+        json_response = {}
+        json_data = json.loads(r.text) 
+        list_magic = []
+        for l in json_data["result"]:
+            json_tmp = {}
+            json_tmp["categoryName"] = l["primary_type"]
+            json_tmp["placeName"] = l["name"]
+            json_tmp["placeId"] = str(l["id"])
+            json_tmp["placeDescription"] = l["address"]
+            json_tmp["lat"] = l["lat"]
+            json_tmp["lng"] = l["lng"]
+            json_tmp["urlImage"] = "http://engserv-1-aulas.ws.atnog.av.it.pt/geoclust/" + str(l["id"]) + ".jpeg"
+            list_magic.append(json_tmp)
+
+        route = {"route":list_magic}
+
+
+    response = JsonResponse(route, content_type='application/json')
+    return response
+def change_magic(request, lat, lng, place_id):
+    print(lat)
+    print(lng)
+
+    headers = {'Content-type': 'application/json'}
+    r = requests.get('http://geoclust_api:3001/api/v1/magic/change?lat='+lat+"&lng="+lng+"&place_id="+place_id, headers=headers)
+    if(r.status_code==200):
+        print(r.text)
         json_response = {}
         json_data = json.loads(r.text) 
         list_magic = []
@@ -86,6 +172,7 @@ def magic_route(request):
             list_magic.append(json_tmp)
 
         route = {"route":list_magic}
+    print(r.status_code)
 
 
     response = JsonResponse(route, content_type='application/json')
@@ -133,13 +220,10 @@ def get_user_lists(request, user_id):
                             listIds = ListPostPhoto.objects.get(listId=l["id"], postId=l2["id"])
                             url3 = 'http://cdnapi:8080/api/v1/user/' + listIds.imageId
                             r3 = requests.get(url3, headers=headers)
-                            print(json.loads(r3.text)["url"])
-                            print("EXISTE")
                             json_tmp1["urlImage"] = json.loads(r3.text)["url"]
                         else:
                             json_tmp1["urlImage"] = "http://engserv-1-aulas.ws.atnog.av.it.pt/geoclust/" + str(l1["internal_id_place"]) + ".jpeg"
 
-                        print(json_tmp1)
                     list_items.append(json_tmp1)
             json_tmp["listItem"] = list_items
             list_lists.append(json_tmp)
@@ -147,14 +231,15 @@ def get_user_lists(request, user_id):
         response = JsonResponse(json_response, content_type='application/json')
     return response
 
-def near_places(request):
+def near_places(request,lat, lng):
+    print(lat)
+    print(lng)
+
     headers = {'Content-type': 'application/json'}
-    r = requests.get(' http://geoclust_api:3001/api/v1/gspots', headers=headers)
+    r = requests.get(' http://geoclust_api:3001/api/v1/gspots?lat='+lat+"&lng="+lng, headers=headers)
     if(r.status_code==200):
         json_response = {}
         json_data = json.loads(r.text) 
-
-
         json_response["listPlaces"] = json_data["result"]
         response = JsonResponse(json_response, content_type='application/json')
     response = JsonResponse(json_response, content_type='application/json')
@@ -162,7 +247,7 @@ def near_places(request):
 
 def list_name(request, user_id):
     headers = {'Content-type': 'application/json'}
-    r = requests.get('http://geoclust_api:3001/api/v1/lists/user/1', headers=headers)
+    r = requests.get('http://geoclust_api:3001/api/v1/lists/user/'+str(user_id), headers=headers)
     if(r.status_code==200):
         json_response = {}
         json_data = json.loads(r.text) 
@@ -186,10 +271,31 @@ def add_item_list(request):
     r = requests.post('http://geoclust_api:3001/api/v1/visits', data=jsonData, headers=headers)
     if(r.status_code == 200):
         json_data = json.loads(r.text) 
+        
     else:
         json_data = {"status":False}
     
     response = JsonResponse(json_data, content_type='application/json')
+
+
+    user = UserAuth.objects.get(userId=user_id)
+    jsonLoaded = {"jwt":user.cookie}
+    jsonData = {}
+    jsonData["description"] = "added a new item to personal list "
+    response = requests.post('http://auth_api:3000/social/v1/publication/create', cookies=jsonLoaded, data=json.dumps(jsonData))
+    r1 = json.loads(response.text)
+    status = False
+    try:
+        PostFeed.objects.create(
+                userId=user_id,
+                urlStatic="http://engserv-1-aulas.ws.atnog.av.it.pt/geoclust/" + request.POST["itemId"] + ".jpeg",
+                authId=r1["code"],
+                localsIds= "none",)
+        status=True
+
+    except IntegrityError as e:
+        print(e)
+
     return response
 
 
@@ -198,13 +304,12 @@ def create_list(request):
     headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
 
     name = request.POST["name"];
-    new_list = {"user_id":1, "list_name":name}
+    new_list = {"user_id":int(request.POST["user_id"]), "list_name":name}
     jsonData = json.dumps(new_list)
     r = requests.post('http://geoclust_api:3001/api/v1/lists', data=jsonData, headers=headers)
  
     if(r.status_code == 200):
         json_data = json.loads(r.text) 
-        print(json_data)
     else:
         json_data = {"status":False}
         response = JsonResponse(json_data, content_type='application/json')
@@ -235,6 +340,7 @@ def save_on_cdn(request):
                 if(listIds.exists()):
                     listIds = ListPostPhoto.objects.get(listId=listId, postId=postId)
                     listIds.imageId= (json.loads(r1.text)["result"]).split(" ")[1]
+                    listIds.save()
 
                 else:
                     ListPostPhoto.objects.create(
@@ -245,10 +351,34 @@ def save_on_cdn(request):
                 json_data = {"status":True}
                 response = JsonResponse(json_data, content_type='application/json')
                 return response
-                listIds.save()
 
             except IntegrityError as e:
                 print(e)
+
+    json_data = {"status":False}
+    response = JsonResponse(json_data, content_type='application/json')
+    return response
+
+@csrf_exempt
+def discover_place(request):
+    print("ENTROU")
+    print("AQUI")
+    headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
+    print(request.FILES)
+    data = request.FILES.get("photos")
+    files = {'file': data}
+    r1 = requests.post('http://172.22.0.13:8080/api/v1/recognize/',files=files)
+    print(r1.status_code)
+    print(r1.text)
+    if(r1.status_code==200):
+        try:
+
+            #r1.text["status"] =True
+            response = JsonResponse(json.loads(r1.text), content_type='application/json')
+            return response
+
+        except IntegrityError as e:
+            print(e)
 
     json_data = {"status":False}
     response = JsonResponse(json_data, content_type='application/json')
@@ -258,12 +388,11 @@ def save_on_cdn(request):
 @csrf_exempt
 def create_user(request):
     jwt = request.POST["cookie"][4:]
-    print(jwt)
     jsonLoaded = {"jwt":jwt}
     response = requests.post('http://auth_api:3000/auth/v1/getselfuser', cookies=jsonLoaded)
+    print(response.text)
     user = {}
     if(response.status_code):
-        print(json.loads(response.text))
         try:
             user = json.loads(response.text)[0]
 
@@ -275,6 +404,7 @@ def create_user(request):
                 UserAuth.objects.create(
                         userId=user["id"],
                         cookie=jwt,
+                        image= "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRx-RKT_MyU2F4V6i3z2TIZ2Y_VNP3u7tkrPJvpQH5kFuj5-7XEiQ",
                         )
             user["status"]=True
             response = JsonResponse(user, content_type='application/json')
@@ -296,22 +426,22 @@ def user_info(request, user_id, other_id):
     jsonData["value"] = other_id
     response = requests.post('http://auth_api:3000/auth/v1/getusers', cookies=jsonLoaded, data=json.dumps(jsonData))
     r = json.loads(response.text)[0]
-    print(response.status_code)
     if(response.status_code == 200):
         status = True
-        print("ENTROU")
-        print(type(r))
         r['status'] = status
+        try:
+            user = UserAuth.objects.get(userId=other_id)
+            r["urlImage"] = user.image
+        except IntegrityError as e:
+            print(e)
+
 
         jsonData={}
         jsonData["id"]=other_id
         response1 = requests.post('http://auth_api:3000/social/v1/follows/getfollowers', cookies=jsonLoaded, data=json.dumps(jsonData))
-        print(response1.text)
         r1 = json.loads(response1.text)
         if(response1.status_code == 200):
             r["followers"]= r1 if r1 != None else []
-            print("AQUI")
-            print(r)
             response2 = requests.post('http://auth_api:3000/social/v1/follows/getfollowing', cookies=jsonLoaded, data=json.dumps(jsonData))
             r2 = json.loads(response2.text)
             if(response.status_code == 200):
@@ -323,12 +453,10 @@ def user_info(request, user_id, other_id):
 
 def search(request, user_id, pattern):
     user = UserAuth.objects.get(userId=user_id)
-    print(user.cookie)
     jsonLoaded = {"jwt":user.cookie}
     status = False
     response = requests.post('http://auth_api:3000/auth/v1/getallusers', cookies=jsonLoaded)
     r = json.loads(response.text)
-    print(r)
     json_response = []
     if(response.status_code == 200):
         for l in r:
@@ -357,8 +485,6 @@ def follow(request, user_id, other_id):
     jsonData = {}
     jsonData["id"] = other_id
     response = requests.post('http://auth_api:3000/social/v1/follows/follow', cookies=jsonLoaded, data=json.dumps(jsonData))
-    print(response.status_code)
-    print(response.text)
     r1 = json.loads(response.text)
     response = JsonResponse(r1, content_type='application/json')
     return response
@@ -369,26 +495,21 @@ def unfollow(request, user_id, other_id):
     jsonData = {}
     jsonData["id"] = other_id
     response = requests.post('http://auth_api:3000/social/v1/follows/stopfollowing', cookies=jsonLoaded, data=json.dumps(jsonData))
-    print(response.status_code)
-    print(response.text)
     r1 = json.loads(response.text)
     response = JsonResponse(r1, content_type='application/json')
     return response
 
 @csrf_exempt
-def add_to_feed(request, user_id):
+def add_route_to_feed(request, user_id):
     urlStatic = request.POST["urlStatic"]
     localsIds = request.POST["localsIds"]
-    print(urlStatic)
-    print(localsIds)
     user = UserAuth.objects.get(userId=user_id)
     jsonLoaded = {"jwt":user.cookie}
     jsonData = {}
-    jsonData["description"] = "empty"
+    jsonData["description"] = "added a new route for him"
     response = requests.post('http://auth_api:3000/social/v1/publication/create', cookies=jsonLoaded, data=json.dumps(jsonData))
     r1 = json.loads(response.text)
     print(r1)
-    print(r1["code"])
     status = False
     try:
         PostFeed.objects.create(
@@ -400,7 +521,7 @@ def add_to_feed(request, user_id):
 
     except IntegrityError as e:
         print(e)
-    json_data = {"status":False}
-    print(json_data)
+    json_data = {"status":status}
     response = JsonResponse(json_data, content_type='application/json')
+    print(json_data)
     return response
