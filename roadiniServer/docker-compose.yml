@@ -14,21 +14,21 @@ services:
         - postgres
     networks: 
         - proxynet
-
-  nginx:
-    restart: always
-    image: nginx:1.13
-    ports:
-        - "80:80"
-    volumes:
-        - ./config/nginx/conf.d:/etc/nginx/conf.d
-        - ./config/nginx/nginx.conf:/etc/nginx/nginx.conf
-    depends_on:
-        - web
-    expose:
-        - "80"
-    networks:
-        - proxynet
+  
+          # nginx:
+          # restart: always
+          # image: nginx:1.13
+          # ports:
+          # - "80:80"
+          # volumes:
+          # - ./config/nginx/conf.d:/etc/nginx/conf.d
+          # - ./config/nginx/nginx.conf:/etc/nginx/nginx.conf
+          # depends_on:
+          # - web
+          # expose:
+          # - "80"
+          # networks:
+          # - proxynet
 
   postgres:
     container_name: roadini_db

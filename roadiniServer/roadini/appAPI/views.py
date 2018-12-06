@@ -92,6 +92,7 @@ def feed(request, user_id):
         if r != []:
             for f in r:
                 try:
+                    print(f["id"])
                     feedObject = PostFeed.objects.get(authId = f["id"])
 
                     jsonPost = {}
@@ -105,6 +106,7 @@ def feed(request, user_id):
 
                     posts.append(jsonPost)
                 except IntegrityError as e:
+                    print("AQUI")
                     print(e)
     feed = {"feed" : posts }
     response = JsonResponse(feed, content_type='application/json')
@@ -141,7 +143,7 @@ def magic_route(request,user_id, lat, lng):
             json_tmp["placeDescription"] = l["address"]
             json_tmp["lat"] = l["lat"]
             json_tmp["lng"] = l["lng"]
-            json_tmp["urlImage"] = "http://engserv-1-aulas.ws.atnog.av.it.pt/geoclust/" + str(l["id"]) + ".jpeg"
+            json_tmp["urlImage"] = "http://engserv1-aulas.ws.atnog.av.it.pt/geoclust/" + str(l["id"]) + ".jpeg"
             list_magic.append(json_tmp)
 
         route = {"route":list_magic}
@@ -168,7 +170,7 @@ def change_magic(request, lat, lng, place_id):
             json_tmp["placeDescription"] = l["address"]
             json_tmp["lat"] = l["lat"]
             json_tmp["lng"] = l["lng"]
-            json_tmp["urlImage"] = "http://engserv-1-aulas.ws.atnog.av.it.pt/geoclust/" + str(l["id"]) + ".jpeg"
+            json_tmp["urlImage"] = "http://engserv1-aulas.ws.atnog.av.it.pt/geoclust/" + str(l["id"]) + ".jpeg"
             list_magic.append(json_tmp)
 
         route = {"route":list_magic}
@@ -222,7 +224,7 @@ def get_user_lists(request, user_id):
                             r3 = requests.get(url3, headers=headers)
                             json_tmp1["urlImage"] = json.loads(r3.text)["url"]
                         else:
-                            json_tmp1["urlImage"] = "http://engserv-1-aulas.ws.atnog.av.it.pt/geoclust/" + str(l1["internal_id_place"]) + ".jpeg"
+                            json_tmp1["urlImage"] = "http://engserv1-aulas.ws.atnog.av.it.pt/geoclust/" + str(l1["internal_id_place"]) + ".jpeg"
 
                     list_items.append(json_tmp1)
             json_tmp["listItem"] = list_items
@@ -269,33 +271,36 @@ def add_item_list(request):
     new_list = {"list_id":int(request.POST["listId"]), "internal_id_place":int(request.POST["itemId"]), "review": request.POST["review"]}
     jsonData = json.dumps(new_list)
     r = requests.post('http://geoclust_api:3001/api/v1/visits', data=jsonData, headers=headers)
+    status = False
     if(r.status_code == 200):
         json_data = json.loads(r.text) 
+        status = True
+        json_data["status"]=status
         
     else:
-        json_data = {"status":False}
+        json_data = {"status":status}
     
+
+
+    if(status):
+        user = UserAuth.objects.get(userId=user_id)
+        jsonLoaded = {"jwt":user.cookie}
+        jsonData = {}
+        jsonData["description"] = "added a new item to personal list " + request.POST["listName"]
+        response2 = requests.post('http://auth_api:3000/social/v1/publication/create', cookies=jsonLoaded, data=json.dumps(jsonData))
+        r1 = json.loads(response2.text)
+        if(r1.status_code == 200):
+            try:
+                PostFeed.objects.create(
+                        userId=user_id,
+                        urlStatic="http://engserv1-aulas.ws.atnog.av.it.pt/geoclust/" + request.POST["itemId"] + ".jpeg",
+                        authId=r1["code"],
+                        localsIds= "none",)
+                status=True
+
+            except IntegrityError as e:
+                print(e)
     response = JsonResponse(json_data, content_type='application/json')
-
-
-    user = UserAuth.objects.get(userId=user_id)
-    jsonLoaded = {"jwt":user.cookie}
-    jsonData = {}
-    jsonData["description"] = "added a new item to personal list "
-    response = requests.post('http://auth_api:3000/social/v1/publication/create', cookies=jsonLoaded, data=json.dumps(jsonData))
-    r1 = json.loads(response.text)
-    status = False
-    try:
-        PostFeed.objects.create(
-                userId=user_id,
-                urlStatic="http://engserv-1-aulas.ws.atnog.av.it.pt/geoclust/" + request.POST["itemId"] + ".jpeg",
-                authId=r1["code"],
-                localsIds= "none",)
-        status=True
-
-    except IntegrityError as e:
-        print(e)
-
     return response
 
 
@@ -367,14 +372,15 @@ def discover_place(request):
     print(request.FILES)
     data = request.FILES.get("photos")
     files = {'file': data}
-    r1 = requests.post('http://172.22.0.13:8080/api/v1/recognize/',files=files)
+    r1 = requests.post('http://imagerecognition:8080/api/v1/recognize/',files=files)
     print(r1.status_code)
     print(r1.text)
     if(r1.status_code==200):
         try:
 
-            #r1.text["status"] =True
-            response = JsonResponse(json.loads(r1.text), content_type='application/json')
+            json_return = json.loads(r1.text)
+            json_return["status"] =True
+            response = JsonResponse(json_return, content_type='application/json')
             return response
 
         except IntegrityError as e:
@@ -464,8 +470,10 @@ def search(request, user_id, pattern):
                 newL = l
                 jsonData = {}
                 jsonData["id"]=l["id"]
+                u = UserAuth.objects.get(userId=l["id"])
                 response1 = requests.post('http://auth_api:3000/social/v1/follows/getfollowers', cookies=jsonLoaded, data=json.dumps(jsonData))
                 r1 = json.loads(response1.text)
+                newL["image"] = u.image
                 if(response1.status_code == 200):
                     newL["followers"]= r1 if r1 != None else []
                     response2 = requests.post('http://auth_api:3000/social/v1/follows/getfollowing', cookies=jsonLoaded, data=json.dumps(jsonData))
