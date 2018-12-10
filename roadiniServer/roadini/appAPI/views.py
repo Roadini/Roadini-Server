@@ -91,23 +91,25 @@ def feed(request, user_id):
         r = json.loads(response.text)
         if r != []:
             for f in r:
-                try:
-                    print(f["id"])
-                    feedObject = PostFeed.objects.get(authId = f["id"])
+                print(f["id"])
+                if(PostFeed.objects.filter(authId = f["id"]).exists()):
 
-                    jsonPost = {}
-                    jsonPost["username"] = r2["name"]
-                    jsonPost["location"] = "need Location"
-                    jsonPost["description"] = r2["name"] + " " + f["description"]
-                    jsonPost["postId"] = feedObject.authId
-                    jsonPost["ownerId"] = u.userId
-                    jsonPost["urlImage"] = feedObject.urlStatic
-                    jsonPost["photo"] = u.image 
+                    try:
+                        feedObject = PostFeed.objects.get(authId = f["id"])
 
-                    posts.append(jsonPost)
-                except IntegrityError as e:
-                    print("AQUI")
-                    print(e)
+                        jsonPost = {}
+                        jsonPost["username"] = r2["name"]
+                        jsonPost["location"] = "need Location"
+                        jsonPost["description"] = r2["name"] + " " + f["description"]
+                        jsonPost["postId"] = feedObject.authId
+                        jsonPost["ownerId"] = u.userId
+                        jsonPost["urlImage"] = feedObject.urlStatic
+                        jsonPost["photo"] = u.image 
+
+                        posts.append(jsonPost)
+                    except IntegrityError as e:
+                        print("AQUI")
+                        print(e)
     feed = {"feed" : posts }
     response = JsonResponse(feed, content_type='application/json')
     return response
@@ -283,16 +285,16 @@ def add_item_list(request):
 
 
     if(status):
-        user = UserAuth.objects.get(userId=user_id)
+        user = UserAuth.objects.get(userId=request.POST["userId"])
         jsonLoaded = {"jwt":user.cookie}
         jsonData = {}
-        jsonData["description"] = "added a new item to personal list " + request.POST["listName"]
+        jsonData["description"] = "added a new item to personal list \" " + request.POST["listName"] + " \""
         response2 = requests.post('http://auth_api:3000/social/v1/publication/create', cookies=jsonLoaded, data=json.dumps(jsonData))
         r1 = json.loads(response2.text)
-        if(r1.status_code == 200):
+        if(response2.status_code == 200):
             try:
                 PostFeed.objects.create(
-                        userId=user_id,
+                        userId=request.POST["userId"],
                         urlStatic="http://engserv1-aulas.ws.atnog.av.it.pt/geoclust/" + request.POST["itemId"] + ".jpeg",
                         authId=r1["code"],
                         localsIds= "none",)
@@ -332,6 +334,7 @@ def save_on_cdn(request):
     new_list = {"list_id":listId, "internal_id_place":postId, "review": request.POST["review"]}
     jsonData = json.dumps(new_list)
     r = requests.post('http://geoclust_api:3001/api/v1/visits', data=jsonData, headers=headers)
+    status = False
     if(r.status_code == 200):
         data = request.FILES.get("photos")
         files = {'file': data}
@@ -340,41 +343,65 @@ def save_on_cdn(request):
         if(r1.status_code==201):
 
             try:
+                imageId = (json.loads(r1.text)["result"]).split(" ")[1]
 
                 listIds = ListPostPhoto.objects.filter(listId=listId, postId=postId)
                 if(listIds.exists()):
                     listIds = ListPostPhoto.objects.get(listId=listId, postId=postId)
-                    listIds.imageId= (json.loads(r1.text)["result"]).split(" ")[1]
+                    listIds.imageId= imageId
                     listIds.save()
 
                 else:
                     ListPostPhoto.objects.create(
                             listId=listId,
                             postId=postId,
-                            imageId=(json.loads(r1.text)["result"]).split(" ")[1],
+                            imageId=imageId,
                             )
-                json_data = {"status":True}
-                response = JsonResponse(json_data, content_type='application/json')
-                return response
+                status = True
+                json_data = {"status":status}
 
             except IntegrityError as e:
                 print(e)
 
-    json_data = {"status":False}
+    if(status):
+
+
+        user = UserAuth.objects.get(userId=request.POST["userId"])
+        jsonLoaded = {"jwt":user.cookie}
+        jsonData = {}
+        jsonData["description"] = "added a new item to personal list \" " + request.POST["listName"] + " \""
+        response2 = requests.post('http://auth_api:3000/social/v1/publication/create', cookies=jsonLoaded, data=json.dumps(jsonData))
+        r11 = json.loads(response2.text)
+        if(response2.status_code == 200):
+            try:
+
+                print("URL3")
+                headers = {'Content-type': 'application/json'}
+                url3 = 'http://cdnapi:8080/api/v1/user/' + imageId
+                r3 = requests.get(url3, headers=headers)
+                print("R3:  " + r3.text)
+                urlImage = json.loads(r3.text)["url"]
+
+                PostFeed.objects.create(
+                        userId=request.POST["userId"],
+                        urlStatic=urlImage,
+                        authId=r11["code"],
+                        localsIds= "none",)
+                status=True
+
+            except IntegrityError as e:
+                print(e)
+
+    json_data = {"status":status}
     response = JsonResponse(json_data, content_type='application/json')
     return response
 
 @csrf_exempt
 def discover_place(request):
-    print("ENTROU")
-    print("AQUI")
     headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
-    print(request.FILES)
     data = request.FILES.get("photos")
     files = {'file': data}
     r1 = requests.post('http://imagerecognition:8080/api/v1/recognize/',files=files)
-    print(r1.status_code)
-    print(r1.text)
     if(r1.status_code==200):
         try:
 
@@ -396,11 +423,11 @@ def create_user(request):
     jwt = request.POST["cookie"][4:]
     jsonLoaded = {"jwt":jwt}
     response = requests.post('http://auth_api:3000/auth/v1/getselfuser', cookies=jsonLoaded)
-    print(response.text)
     user = {}
     if(response.status_code):
         try:
             user = json.loads(response.text)[0]
+            print(user["id"])
 
             if(UserAuth.objects.filter(userId=user["id"]).exists()):
                 userExist = UserAuth.objects.get(userId=user["id"])
@@ -415,7 +442,8 @@ def create_user(request):
             user["status"]=True
             response = JsonResponse(user, content_type='application/json')
             return response
-        except:
+        except IntegrityError as e:
+            print(e)
             user["status"]=False
             response = JsonResponse(user, content_type='application/json')
     else:
