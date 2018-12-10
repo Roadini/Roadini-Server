@@ -1,23 +1,26 @@
-from django.shortcuts import render
-from rest_framework import viewsets
+from .models import ListPostPhoto
+from .models import PathsTable
+from .models import PostFeed
+from .models import UserAuth
+
 from .serializers import PathsTableSerializer
 
+from django.db import IntegrityError
+from django.http import JsonResponse # Create your views here.
+from django.shortcuts import render
+from django.shortcuts import render_to_response
+from django.views.decorators.csrf import csrf_exempt
+
 from random import randint
-import requests
+from rest_framework import viewsets
+
+import base64
+import datetime
 import http.cookiejar
 import json
 import os
-import base64
-
-from django.views.decorators.csrf import csrf_exempt
-from django.http import JsonResponse # Create your views here.
-from django.db import IntegrityError
-from django.shortcuts import render_to_response
-
-from .models import PathsTable
-from .models import ListPostPhoto
-from .models import UserAuth
-from .models import PostFeed
+import requests
+import time
 
 
 
@@ -49,16 +52,14 @@ def edit_image(request):
     headers = {'Content-type': 'application/json'}
     data = request.FILES.get("photos")
     files = {'file': data}
-    r1 = requests.post('http://cdnapi:8080/api/v1/user/',files=files)
+    r1 = requests.post('http://cdnapiv2:8080/api/v2/',files=files)
     json_response = {}
     status = False
     if(r1.status_code==201):
-        url2 = 'http://cdnapi:8080/api/v1/user/' + (json.loads(r1.text)["result"]).split(" ")[1]
-        r3 = requests.get(url2, headers=headers)
-        print(json.loads(r3.text)["url"])
+        imageId = (json.loads(r1.text)["result"]).split(" ")[2]
         try:
             user = UserAuth.objects.get(userId=request.POST["userId"])
-            user.image = json.loads(r3.text)["url"]
+            user.image ='http://engserv1-aulas.ws.atnog.av.it.pt/cdnapiv2/api/v2/' + imageId,
             user.save()
             status = True
         except IntegrityError as e:
@@ -99,18 +100,22 @@ def feed(request, user_id):
 
                         jsonPost = {}
                         jsonPost["username"] = r2["name"]
-                        jsonPost["location"] = "need Location"
+                        jsonPost["location"] = feedObject.post_time.strftime("%B %d, %Y")
                         jsonPost["description"] = r2["name"] + " " + f["description"]
                         jsonPost["postId"] = feedObject.authId
                         jsonPost["ownerId"] = u.userId
                         jsonPost["urlImage"] = feedObject.urlStatic
                         jsonPost["photo"] = u.image 
+                        jsonPost["date"] = feedObject.post_time 
 
                         posts.append(jsonPost)
                     except IntegrityError as e:
                         print("AQUI")
                         print(e)
+    posts.sort(key=lambda x: x["date"], reverse=True)
     feed = {"feed" : posts }
+
+
     response = JsonResponse(feed, content_type='application/json')
     return response
 
@@ -133,6 +138,8 @@ def magic_route(request,user_id, lat, lng):
 
     headers = {'Content-type': 'application/json'}
     r = requests.get('http://geoclust_api:3001/api/v1/magic?lat='+lat+"&lng="+lng+"&user="+str(user_id), headers=headers)
+    print(r.status_code)
+    print(r.text)
     if(r.status_code==200):
         json_response = {}
         json_data = json.loads(r.text) 
@@ -222,9 +229,7 @@ def get_user_lists(request, user_id):
 
                         if(ListPostPhoto.objects.filter(listId=l["id"], postId=l2["id"]).exists()):
                             listIds = ListPostPhoto.objects.get(listId=l["id"], postId=l2["id"])
-                            url3 = 'http://cdnapi:8080/api/v1/user/' + listIds.imageId
-                            r3 = requests.get(url3, headers=headers)
-                            json_tmp1["urlImage"] = json.loads(r3.text)["url"]
+                            json_tmp1["urlImage"] = listIds.imageId
                         else:
                             json_tmp1["urlImage"] = "http://engserv1-aulas.ws.atnog.av.it.pt/geoclust/" + str(l1["internal_id_place"]) + ".jpeg"
 
@@ -241,6 +246,8 @@ def near_places(request,lat, lng):
 
     headers = {'Content-type': 'application/json'}
     r = requests.get(' http://geoclust_api:3001/api/v1/gspots?lat='+lat+"&lng="+lng, headers=headers)
+    print(r)
+    print(r.text)
     if(r.status_code==200):
         json_response = {}
         json_data = json.loads(r.text) 
@@ -293,9 +300,11 @@ def add_item_list(request):
         r1 = json.loads(response2.text)
         if(response2.status_code == 200):
             try:
+                date = datetime.datetime.now()
                 PostFeed.objects.create(
                         userId=request.POST["userId"],
                         urlStatic="http://engserv1-aulas.ws.atnog.av.it.pt/geoclust/" + request.POST["itemId"] + ".jpeg",
+                        post_time=date,
                         authId=r1["code"],
                         localsIds= "none",)
                 status=True
@@ -338,24 +347,26 @@ def save_on_cdn(request):
     if(r.status_code == 200):
         data = request.FILES.get("photos")
         files = {'file': data}
-        r1 = requests.post('http://cdnapi:8080/api/v1/user/',files=files)
+        r1 = requests.post('http://cdnapiv2:8080/api/v2/',files=files)
+        print(r1)
+        print(r1.text)
 
         if(r1.status_code==201):
 
             try:
-                imageId = (json.loads(r1.text)["result"]).split(" ")[1]
+                imageId = (json.loads(r1.text)["result"]).split(" ")[2]
 
                 listIds = ListPostPhoto.objects.filter(listId=listId, postId=postId)
                 if(listIds.exists()):
                     listIds = ListPostPhoto.objects.get(listId=listId, postId=postId)
-                    listIds.imageId= imageId
+                    listIds.imageId= 'http://engserv1-aulas.ws.atnog.av.it.pt/cdnapiv2/api/v2/' + imageId
                     listIds.save()
 
                 else:
                     ListPostPhoto.objects.create(
                             listId=listId,
                             postId=postId,
-                            imageId=imageId,
+                            imageId='http://engserv1-aulas.ws.atnog.av.it.pt/cdnapiv2/api/v2/' + imageId,
                             )
                 status = True
                 json_data = {"status":status}
@@ -375,16 +386,11 @@ def save_on_cdn(request):
         if(response2.status_code == 200):
             try:
 
-                print("URL3")
-                headers = {'Content-type': 'application/json'}
-                url3 = 'http://cdnapi:8080/api/v1/user/' + imageId
-                r3 = requests.get(url3, headers=headers)
-                print("R3:  " + r3.text)
-                urlImage = json.loads(r3.text)["url"]
-
+                date = datetime.datetime.now()
                 PostFeed.objects.create(
                         userId=request.POST["userId"],
-                        urlStatic=urlImage,
+                        urlStatic='http://engserv1-aulas.ws.atnog.av.it.pt/cdnapiv2/api/v2/' + imageId,
+                        post_time=date,
                         authId=r11["code"],
                         localsIds= "none",)
                 status=True
@@ -548,9 +554,11 @@ def add_route_to_feed(request, user_id):
     print(r1)
     status = False
     try:
+        date = datetime.datetime.now()
         PostFeed.objects.create(
                 userId=user_id,
                 urlStatic=urlStatic,
+                post_time=date,
                 authId=r1["code"],
                 localsIds= localsIds,)
         status=True

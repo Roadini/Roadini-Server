@@ -37,6 +37,7 @@ class PostFeed(models.Model):
     urlStatic = models.TextField(null=False, blank=False)
     authId = models.IntegerField(null=False, blank=False)
     localsIds = models.TextField(null=False, blank=False)
+    post_time = models.DateTimeField(blank=False, null=False)
 
     class Meta:
         unique_together = (("userId","authId"))
