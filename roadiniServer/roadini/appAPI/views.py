@@ -56,10 +56,14 @@ def edit_image(request):
     json_response = {}
     status = False
     if(r1.status_code==201):
+        print("AQUI")
+        print((json.loads(r1.text)["result"]).split(" ")[2])
         imageId = (json.loads(r1.text)["result"]).split(" ")[2]
         try:
+            imageUrl = "http://engserv1-aulas.ws.atnog.av.it.pt/cdnapiv2/api/v2/" + imageId
+            print(imageUrl)
             user = UserAuth.objects.get(userId=request.POST["userId"])
-            user.image ='http://engserv1-aulas.ws.atnog.av.it.pt/cdnapiv2/api/v2/' + imageId,
+            user.image = imageUrl
             user.save()
             status = True
         except IntegrityError as e:
@@ -471,6 +475,9 @@ def user_info(request, user_id, other_id):
         r['status'] = status
         try:
             user = UserAuth.objects.get(userId=other_id)
+            print("IMAGE")
+            print(type(user.image))
+            print(user.image)
             r["urlImage"] = user.image
         except IntegrityError as e:
             print(e)
@@ -507,6 +514,7 @@ def search(request, user_id, pattern):
                 u = UserAuth.objects.get(userId=l["id"])
                 response1 = requests.post('http://auth_api:3000/social/v1/follows/getfollowers', cookies=jsonLoaded, data=json.dumps(jsonData))
                 r1 = json.loads(response1.text)
+                print(u.image)
                 newL["image"] = u.image
                 if(response1.status_code == 200):
                     newL["followers"]= r1 if r1 != None else []
